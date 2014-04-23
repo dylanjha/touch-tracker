@@ -11,7 +11,7 @@
 
 @interface BNRDrawView()
 
-@property (nonatomic, strong) BNRLine *currentLine;
+@property (nonatomic, strong) NSMutableDictionary *linesInProgress;
 @property (nonatomic, strong) NSMutableArray *finishedLines;
 
 @end
@@ -24,6 +24,7 @@
     
     if(self){
         self.finishedLines = [[NSMutableArray alloc] init];
+        self.linesInProgress = [[NSMutableDictionary alloc] init];
         self.backgroundColor = [UIColor grayColor];
         self.multipleTouchEnabled = YES;
     }
@@ -50,34 +51,61 @@
         [self strokeLine:line];
     }
     
-    if(self.currentLine){
-        //if there is a line currently being drawwn, do so in red
-        [[UIColor redColor] set];
-        [self strokeLine:self.currentLine];
+    NSEnumerator *enumerator = [self.linesInProgress keyEnumerator];
+    id key;
+
+    [[UIColor redColor] set];
+    while((key = [enumerator nextObject])){
+        BNRLine *line = self.linesInProgress[key];
+        [self strokeLine:line];
     }
+}
+
+- (void)touchesCancelled:(NSSet *)touches
+               withEvent:(UIEvent *)event
+{
+    NSLog(@"%@", NSStringFromSelector(_cmd));
+    //key
+    for (UITouch *t in touches){
+        NSValue *key = [NSValue valueWithNonretainedObject:t];
+        [self.linesInProgress removeObjectForKey:key];
+    }
+
+    [self setNeedsDisplay];
 }
 
 - (void)touchesBegan:(NSSet *)touches
            withEvent:(UIEvent *)event
 {
-    UITouch *t = [touches anyObject];
-    
-    //Get location of the touch in the view's coordinate system
-    CGPoint location = [t locationInView:self];
-    self.currentLine = [[BNRLine alloc] init];
-    self.currentLine.begin = location;
-    self.currentLine.end = location;
-    
+    NSLog(@"%@", NSStringFromSelector(_cmd));
+    //loop through the touches that begin and
+    //keep them in the dictionary
+    for(UITouch *t in touches){
+        //store the key based on `t` so we can find it again
+        NSValue *key = [NSValue valueWithNonretainedObject:t];
+
+        CGPoint location = [t locationInView:self];
+        BNRLine *line = [[BNRLine alloc] init];
+        line.begin = location;
+        line.end = location;
+
+        self.linesInProgress[key] = line;
+    }
+
     [self setNeedsDisplay];
 }
 
 - (void)touchesMoved:(NSSet *)touches
            withEvent:(UIEvent *)event
 {
-    UITouch *t = [touches anyObject];
-    
-    CGPoint location = [t locationInView:self];
-    self.currentLine.end = location;
+    NSLog(@"%@", NSStringFromSelector(_cmd));
+    for(UITouch *t in touches){
+        //find the line
+        NSValue *key = [NSValue valueWithNonretainedObject:t];
+        BNRLine *line = self.linesInProgress[key];
+
+        line.end = [t locationInView:self];
+    }
     
     [self setNeedsDisplay];
 }
@@ -85,9 +113,15 @@
 - (void)touchesEnded:(NSSet *)touches
            withEvent:(UIEvent *)event
 {
-    [self.finishedLines addObject:self.currentLine];
-    
-    self.currentLine = nil;
+    NSLog(@"%@", NSStringFromSelector(_cmd));
+    for(UITouch *t in touches){
+        //look up the key and the line
+        NSValue *key = [NSValue valueWithNonretainedObject:t];
+        BNRLine *line = self.linesInProgress[key];
+
+        [self.finishedLines addObject:line];
+        [self.linesInProgress removeObjectForKey:key];
+    }
     
     [self setNeedsDisplay];
 }
